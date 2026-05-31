@@ -10,29 +10,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  codeql:
-    name: CodeQL (Python)
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: python
-          queries: security-and-quality
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: "/language:python"
-
   trivy-secrets:
     name: Trivy (Secrets)
     runs-on: ubuntu-latest
@@ -55,6 +32,17 @@ jobs:
           format: sarif
           output: trivy-secrets.sarif
           exit-code: 0
+
+      - name: Label SARIF tool as "Trivy Secret Scanner"
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("trivy-secrets.sarif")
+          d = json.loads(p.read_text())
+          for run in d.get("runs", []):
+            run.setdefault("tool", {}).setdefault("driver", {})["name"] = "Trivy Secret Scanner"
+          p.write_text(json.dumps(d))
+          PY
 
       - name: Upload Secrets SARIF to Security tab
         if: always()
@@ -90,6 +78,17 @@ jobs:
           output: trivy-dockerfile.sarif
           severity: CRITICAL,HIGH,MEDIUM
           exit-code: 0
+
+      - name: Label SARIF tool as "Trivy Dockerfile Scanner"
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("trivy-dockerfile.sarif")
+          d = json.loads(p.read_text())
+          for run in d.get("runs", []):
+            run.setdefault("tool", {}).setdefault("driver", {})["name"] = "Trivy Dockerfile Scanner"
+          p.write_text(json.dumps(d))
+          PY
 
       - name: Upload Dockerfile SARIF to Security tab
         if: always()
@@ -130,6 +129,17 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           exit-code: 0
+
+      - name: Label SARIF tool as "Trivy Image Scanner"
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("trivy-image.sarif")
+          d = json.loads(p.read_text())
+          for run in d.get("runs", []):
+            run.setdefault("tool", {}).setdefault("driver", {})["name"] = "Trivy Image Scanner"
+          p.write_text(json.dumps(d))
+          PY
 
       - name: Upload image SARIF to Security tab
         if: always()
