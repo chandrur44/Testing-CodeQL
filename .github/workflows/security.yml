@@ -36,6 +36,18 @@ jobs:
           output: trivy-secrets.sarif
           exit-code: 0
 
+      - name: Trivy Code Dependency Scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: sarif
+          output: trivy-code.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: true
+          exit-code: 0
+
       - name: Trivy Dockerfile scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -64,6 +76,7 @@ jobs:
           import json, pathlib
           for path, name in [
             ("trivy-secrets.sarif",    "Trivy Secret Scanner"),
+            ("trivy-code.sarif",       "Trivy Code Dependency Scanner"),
             ("trivy-dockerfile.sarif", "Trivy Dockerfile Scanner"),
             ("trivy-image.sarif",      "Trivy Image Scanner"),
           ]:
@@ -80,6 +93,13 @@ jobs:
         with:
           sarif_file: trivy-secrets.sarif
           category: trivy-secrets
+
+      - name: Upload code SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-code.sarif
+          category: trivy-code
 
       - name: Upload Dockerfile SARIF
         if: always()
