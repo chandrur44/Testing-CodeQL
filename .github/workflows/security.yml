@@ -104,10 +104,7 @@ jobs:
       - name: Build local image
         run: docker build -t local/testing-codeql:ci .
 
-      - name: Build bait image
-        run: docker build -t local/testing-codeql-bait:ci -f bait/image.Dockerfile bait/
-
-      - name: Run Trivy image scan (real image)
+      - name: Run Trivy image scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
@@ -119,44 +116,15 @@ jobs:
           vuln-type: os,library
           exit-code: 0
 
-      - name: Run Trivy image scan (bait image)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: image
-          image-ref: local/testing-codeql-bait:ci
-          format: sarif
-          output: trivy-image-bait.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          vuln-type: os,library
-          exit-code: 0
-
-      - name: Merge image SARIF reports and label tool
+      - name: Label SARIF tool as "Trivy Image Scanner"
         run: |
           python - <<'PY'
           import json, pathlib
-
-          real = json.loads(pathlib.Path("trivy-image.sarif").read_text())
-          bait = json.loads(pathlib.Path("trivy-image-bait.sarif").read_text())
-
-          # Merge both scans into a SINGLE run (not multiple runs).
-          # GitHub Code Scanning rejects multiple runs in one SARIF under
-          # the same category as of 2025-07-21.
-          target_run = real["runs"][0]
-          target_rules = target_run.setdefault("tool", {}).setdefault("driver", {}).setdefault("rules", [])
-          existing_rule_ids = {r.get("id") for r in target_rules}
-
-          for run in bait.get("runs", []):
-            for rule in run.get("tool", {}).get("driver", {}).get("rules", []):
-              if rule.get("id") not in existing_rule_ids:
-                target_rules.append(rule)
-                existing_rule_ids.add(rule.get("id"))
-            target_run.setdefault("results", []).extend(run.get("results", []))
-
-          target_run["tool"]["driver"]["name"] = "Trivy Image Scanner"
-          real["runs"] = [target_run]
-
-          pathlib.Path("trivy-image.sarif").write_text(json.dumps(real))
+          p = pathlib.Path("trivy-image.sarif")
+          d = json.loads(p.read_text())
+          for run in d.get("runs", []):
+            run.setdefault("tool", {}).setdefault("driver", {})["name"] = "Trivy Image Scanner"
+          p.write_text(json.dumps(d))
           PY
 
       - name: Upload image SARIF to Security tab
