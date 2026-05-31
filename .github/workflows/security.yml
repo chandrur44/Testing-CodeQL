@@ -51,13 +51,6 @@ jobs:
           sarif_file: trivy-secrets.sarif
           category: trivy-secrets
 
-      - name: Upload Secrets SARIF as artifact
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: trivy-secrets-sarif
-          path: trivy-secrets.sarif
-
   trivy-dockerfile:
     name: Trivy (Dockerfile misconfig)
     runs-on: ubuntu-latest
@@ -96,13 +89,6 @@ jobs:
         with:
           sarif_file: trivy-dockerfile.sarif
           category: trivy-dockerfile
-
-      - name: Upload Dockerfile SARIF as artifact
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: trivy-dockerfile-sarif
-          path: trivy-dockerfile.sarif
 
   trivy-image:
     name: Trivy (Docker image vulnerabilities)
@@ -179,10 +165,3 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image
-
-      - name: Upload image SARIF as artifact
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: trivy-image-sarif
-          path: trivy-image.sarif
