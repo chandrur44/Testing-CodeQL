@@ -149,11 +149,27 @@ jobs:
         run: |
           python - <<'PY'
           import json, pathlib
+
           real = json.loads(pathlib.Path("trivy-image.sarif").read_text())
           bait = json.loads(pathlib.Path("trivy-image-bait.sarif").read_text())
-          real["runs"].extend(bait.get("runs", []))
-          for run in real.get("runs", []):
-            run.setdefault("tool", {}).setdefault("driver", {})["name"] = "Trivy Image Scanner"
+
+          # Merge both scans into a SINGLE run (not multiple runs).
+          # GitHub Code Scanning rejects multiple runs in one SARIF under
+          # the same category as of 2025-07-21.
+          target_run = real["runs"][0]
+          target_rules = target_run.setdefault("tool", {}).setdefault("driver", {}).setdefault("rules", [])
+          existing_rule_ids = {r.get("id") for r in target_rules}
+
+          for run in bait.get("runs", []):
+            for rule in run.get("tool", {}).get("driver", {}).get("rules", []):
+              if rule.get("id") not in existing_rule_ids:
+                target_rules.append(rule)
+                existing_rule_ids.add(rule.get("id"))
+            target_run.setdefault("results", []).extend(run.get("results", []))
+
+          target_run["tool"]["driver"]["name"] = "Trivy Image Scanner"
+          real["runs"] = [target_run]
+
           pathlib.Path("trivy-image.sarif").write_text(json.dumps(real))
           PY
 
