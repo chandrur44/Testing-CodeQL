@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   codeql:
     name: CodeQL (Python)
@@ -67,3 +70,78 @@ jobs:
         with:
           name: gitleaks-sarif
           path: gitleaks.sarif
+
+  trivy-dockerfile:
+    name: Trivy (Dockerfile misconfig)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run Trivy config scan on Dockerfile
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: Dockerfile
+          format: sarif
+          output: trivy-dockerfile.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: 0
+
+      - name: Upload Dockerfile SARIF to Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-dockerfile.sarif
+          category: trivy-dockerfile
+
+      - name: Upload Dockerfile SARIF as artifact
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: trivy-dockerfile-sarif
+          path: trivy-dockerfile.sarif
+
+  trivy-image:
+    name: Trivy (Docker image vulnerabilities)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build local image
+        run: docker build -t local/testing-codeql:ci .
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: local/testing-codeql:ci
+          format: sarif
+          output: trivy-image.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: 0
+
+      - name: Upload image SARIF to Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+      - name: Upload image SARIF as artifact
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: trivy-image-sarif
+          path: trivy-image.sarif
