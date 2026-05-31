@@ -69,11 +69,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Run Trivy config scan on Dockerfile
+      - name: Run Trivy config scan on Dockerfiles
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
-          scan-ref: Dockerfile
+          scan-ref: .
           format: sarif
           output: trivy-dockerfile.sarif
           severity: CRITICAL,HIGH,MEDIUM
@@ -118,7 +118,10 @@ jobs:
       - name: Build local image
         run: docker build -t local/testing-codeql:ci .
 
-      - name: Run Trivy image scan
+      - name: Build bait image
+        run: docker build -t local/testing-codeql-bait:ci -f bait/image.Dockerfile bait/
+
+      - name: Run Trivy image scan (real image)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
@@ -130,15 +133,28 @@ jobs:
           vuln-type: os,library
           exit-code: 0
 
-      - name: Label SARIF tool as "Trivy Image Scanner"
+      - name: Run Trivy image scan (bait image)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: local/testing-codeql-bait:ci
+          format: sarif
+          output: trivy-image-bait.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: 0
+
+      - name: Merge image SARIF reports and label tool
         run: |
           python - <<'PY'
           import json, pathlib
-          p = pathlib.Path("trivy-image.sarif")
-          d = json.loads(p.read_text())
-          for run in d.get("runs", []):
+          real = json.loads(pathlib.Path("trivy-image.sarif").read_text())
+          bait = json.loads(pathlib.Path("trivy-image-bait.sarif").read_text())
+          real["runs"].extend(bait.get("runs", []))
+          for run in real.get("runs", []):
             run.setdefault("tool", {}).setdefault("driver", {})["name"] = "Trivy Image Scanner"
-          p.write_text(json.dumps(d))
+          pathlib.Path("trivy-image.sarif").write_text(json.dumps(real))
           PY
 
       - name: Upload image SARIF to Security tab
